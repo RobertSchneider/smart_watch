@@ -1,7 +1,7 @@
 # smart_watch
 
 # DISPLAY
-VCC  -> 3,3
+VCC  -> 3,3 <br>
 GND  -> GND
 SDA  -> SDA
 SCL  -> SCL
