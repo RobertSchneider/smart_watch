@@ -1,20 +1,20 @@
 # smart_watch
 
 # DISPLAY
-VCC  -> 3,3 <br>
-GND  -> GND
-SDA  -> SDA
-SCL  -> SCL
+VCC  -> 3,3<br>
+GND  -> GND<br>
+SDA  -> SDA<br>
+SCL  -> SCL<br>
 
 # BLUEFRUIT
-VIN  -> 3,3
-GNX  -> GND
-RST  -> D9
-RDY  -> TX
-REQ  -> D10
-MOSI -> A
-MISO -> B
-SCK  -> C
-
-X C B
-X A X
+VIN  -> 3,3<br>
+GNX  -> GND<br>
+RST  -> D9<br>
+RDY  -> TX<br>
+REQ  -> D10<br>
+MOSI -> A<br>
+MISO -> B<br>
+SCK  -> C<br>
+<br>
+X C B<br>
+X A X<br>
