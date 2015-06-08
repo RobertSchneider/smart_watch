@@ -22,6 +22,7 @@ Adafruit_SSD1306 display(OLED_RESET);
 #define ADAFRUITBLE_REQ 9
 #define ADAFRUITBLE_RDY 1
 #define ADAFRUITBLE_RST 10
+int32_t seconds = 0;
 
 Adafruit_BLE_UART BTLEserial = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
 
@@ -36,11 +37,14 @@ void setup()   {
   delay(200);
   display.clearDisplay();
   display.display();
+  
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
 }
 
 aci_evt_opcode_t laststatus = ACI_EVT_DISCONNECTED;
 void loop() {
-  
+  clock();
   BTLEserial.pollACI();
   aci_evt_opcode_t status = BTLEserial.getState();
   if (status != laststatus) {
@@ -68,14 +72,30 @@ void loop() {
       }
       cnt++;
     }
-    if(cnt == 4) {
-      char x = c[0];
-      char y = c[1];
-      char d = c[2];
-      char d2 = c[3];
-      display.setData((int16_t)x, (int16_t)y, (int16_t)(d<<8)+d2);
-    }
-    display.display();
+    if(cnt == 5)
+    {
+      char cmd = c[0];
+      if(cmd == 1) display.display();
+      if(cmd == 2) 
+      {
+        int32_t t = 0;
+        t = c[1]<<8;
+        t <<= 8;
+        t |= c[2]<<8;
+        t |= c[3];
+        seconds = t;
+        Serial.println((int)c[1]);
+        Serial.println((int)c[2]);
+        Serial.println((int)c[3]);
+        Serial.println(seconds);
+      }
+    }else {
+      char x = c[1];
+      char y = c[2];
+      char d = c[3];
+      char d2 = c[4];
+      display.setData(x, (int16_t)y, (int)(d<<8)+d2);
+    } 
     
     if (Serial.available()) {
       Serial.setTimeout(100); // 100 millisecond timeout
@@ -86,5 +106,47 @@ void loop() {
       Serial.print(F("\n* Sending -> \"")); Serial.print((char *)sendbuffer); Serial.println("\"");
       BTLEserial.write(sendbuffer, sendbuffersize);
     }
+  }
+}
+
+void drawInt(int i, int x, int y, int fs)
+{
+  if(i == 0) {
+    display.drawChar(x+fs*8, y, '0', WHITE, BLACK, fs);
+    display.drawChar(x, y, '0', WHITE, BLACK, fs);
+    return;
+  }
+  int sCopy = i;
+  int len = 0; while(sCopy > 0) {sCopy/=10; len++;} sCopy = i;
+  int len2 = len;
+  len = 2;
+  while(sCopy > 0) {
+    char c = '0'+(sCopy%10);
+    len--;
+    display.drawChar(x+len*fs*8, y, c, WHITE, BLACK, fs);
+    sCopy /= 10;
+    if(sCopy == 0 && len2 < 2) display.drawChar(x+(len-1)*fs*8, y, '0', WHITE, BLACK, fs);
+  }
+  display.display();
+}
+
+int32_t mseconds = 0;
+const int secs = 28000;
+void clock()
+{
+  mseconds++;
+  if(mseconds >= secs) {
+    mseconds = 0;
+    seconds++;
+    int y = 64/2-4;
+    int x = 64-8;
+    display.drawChar(x+2*8, y, ':', WHITE, BLACK, 1);
+    display.drawChar(x-1*8, y, ':', WHITE, BLACK, 1);
+    
+    //drawInt(seconds, 64, 20, 1);
+    
+    drawInt(seconds/60/60, x-3*8, y, 1);
+    drawInt((seconds/60)%60, x, y, 1);
+    drawInt(seconds%60, x+3*8, y, 1);
   }
 }
