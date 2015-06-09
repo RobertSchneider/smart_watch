@@ -22,7 +22,11 @@ Adafruit_SSD1306 display(OLED_RESET);
 #define ADAFRUITBLE_REQ 9
 #define ADAFRUITBLE_RDY 1
 #define ADAFRUITBLE_RST 10
-int32_t seconds = 0;
+
+unsigned long seconds = 0;
+bool displayMsg = false;
+int secondsMsg = 0;
+int cursorX, cursorY = 64/2-4;
 
 Adafruit_BLE_UART BTLEserial = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
 
@@ -43,8 +47,14 @@ void setup()   {
 }
 
 aci_evt_opcode_t laststatus = ACI_EVT_DISCONNECTED;
+unsigned long lastmillis = 0;
 void loop() {
-  clock();
+  unsigned long m = millis();
+  if(m-lastmillis > 1000) {
+    clock();
+    lastmillis = m;
+  }
+  
   BTLEserial.pollACI();
   aci_evt_opcode_t status = BTLEserial.getState();
   if (status != laststatus) {
@@ -64,47 +74,34 @@ void loop() {
     if (BTLEserial.available()) {
       Serial.print("* "); Serial.print(BTLEserial.available()); Serial.println(F(" bytes available from BTLE"));
     }
-    char c[4]; int cnt = 0;
+    char c[BTLEserial.available()+1]; int cnt = 0;
     while (BTLEserial.available()) {
       char c2 = BTLEserial.read();
-      if(cnt <= 3) {
-        c[cnt] = c2;
-      }
+      c[cnt] = c2;
       cnt++;
     }
-    if(cnt == 5)
+    char cmd = c[0];
+    if(cmd == 3)
     {
-      char cmd = c[0];
-      if(cmd == 1) display.display();
-      if(cmd == 2) 
-      {
-        int32_t t = 0;
-        t = c[1]<<8;
-        t <<= 8;
-        t |= c[2]<<8;
-        t |= c[3];
-        seconds = t;
-        Serial.println((int)c[1]);
-        Serial.println((int)c[2]);
-        Serial.println((int)c[3]);
-        Serial.println(seconds);
-      }
+      displayNotification(c, cnt-1, 1);
     }else {
-      char x = c[1];
-      char y = c[2];
-      char d = c[3];
-      char d2 = c[4];
-      display.setData(x, (int16_t)y, (int)(d<<8)+d2);
-    } 
-    
-    if (Serial.available()) {
-      Serial.setTimeout(100); // 100 millisecond timeout
-      String s = Serial.readString();
-      uint8_t sendbuffer[20];
-      s.getBytes(sendbuffer, 20);
-      char sendbuffersize = min(20, s.length());
-      Serial.print(F("\n* Sending -> \"")); Serial.print((char *)sendbuffer); Serial.println("\"");
-      BTLEserial.write(sendbuffer, sendbuffersize);
+      if(cnt == 5)
+      {
+        if(cmd == 1) display.display();
+        if(cmd == 2) 
+        {
+          int32_t x1 = 0; x1 |= (int)c[1];
+          int32_t x2 = 0; x2 |= (int)c[2];
+          int32_t x3 = 0; x3 |= (int)c[3];
+          seconds = x1*60*60+x2*60+x3;
+        }
+      }else {
+        char x = c[1];
+        char y = c[2];
+        char d = c[3];
+        char d2 = c[4];
+        display.setData(x, (int16_t)y, (int)(d<<8)+d2);
+      }
     }
   }
 }
@@ -127,26 +124,51 @@ void drawInt(int i, int x, int y, int fs)
     sCopy /= 10;
     if(sCopy == 0 && len2 < 2) display.drawChar(x+(len-1)*fs*8, y, '0', WHITE, BLACK, fs);
   }
+}
+
+void hideMsg()
+{
+  displayMsg = false;
+  cursorY = 64/2-4;
+}
+
+void clock()
+{
+  seconds++;
+  int y = 64/2-4;
+  int x = 64-8;
+  if(secondsMsg > 0) secondsMsg--;
+  if(displayMsg) if(secondsMsg == 0) hideMsg(); else return;
+  display.clearDisplay();
+  display.drawChar(x+2*8, y, ':', WHITE, BLACK, 1);
+  display.drawChar(x-8, y, ':', WHITE, BLACK, 1);    
+  drawInt(seconds/60/60, x-3*8, y, 1);
+  drawInt((seconds/60)%60, x, y, 1);
+  drawInt(seconds%60, x+3*8, y, 1);
   display.display();
 }
 
-int32_t mseconds = 0;
-const int secs = 28000;
-void clock()
+void displayNotification(char*c, int len, int offset)
 {
-  mseconds++;
-  if(mseconds >= secs) {
-    mseconds = 0;
-    seconds++;
-    int y = 64/2-4;
-    int x = 64-8;
-    display.drawChar(x+2*8, y, ':', WHITE, BLACK, 1);
-    display.drawChar(x-1*8, y, ':', WHITE, BLACK, 1);
-    
-    //drawInt(seconds, 64, 20, 1);
-    
-    drawInt(seconds/60/60, x-3*8, y, 1);
-    drawInt((seconds/60)%60, x, y, 1);
-    drawInt(seconds%60, x+3*8, y, 1);
-  }
+  secondsMsg = 5;
+  bool prev = displayMsg;
+  displayMsg = true;
+  if(!prev) display.clearDisplay();
+  
+  display.setCursor(0, 0);
+  int x = 128/2-(len/2+offset)*8;
+  int y = cursorY;
+  if(x < 0) x = 0;
+  for(int i = offset; i <= len; i++) {
+    display.drawChar(x, y, c[i], WHITE, BLACK, 1);
+    x+=8;
+    if(x >= 128) {
+      int len2 = len-i-offset-1;
+      x = 128/2-(len/2+offset)*8;
+      y += 8;
+      if(x < 0) x = 0;
+    }
+  } 
+  cursorY = y;
+  display.display();
 }
