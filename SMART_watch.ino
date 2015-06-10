@@ -28,6 +28,14 @@ bool displayMsg = false;
 int secondsMsg = 0;
 int cursorX, cursorY = 64/2-4;
 
+void displayNotification(char*c, int len, int offset);
+
+struct Packet
+{
+  char iD;
+  char len;
+};
+
 Adafruit_BLE_UART BTLEserial = Adafruit_BLE_UART(ADAFRUITBLE_REQ, ADAFRUITBLE_RDY, ADAFRUITBLE_RST);
 
 void setup()   {                
@@ -46,63 +54,52 @@ void setup()   {
   display.setTextColor(WHITE);
 }
 
+//PACKETS
+void processPacket(struct Packet p) 
+{
+  BTLEserial.pollACI();
+  while(!BTLEserial.available());
+  char buff[p.len];
+  for(int i = 0; i < p.len; i++) {
+    while(!BTLEserial.available()) {
+      BTLEserial.pollACI();
+    }
+    buff[i] = BTLEserial.read();
+  }
+  
+  if(p.iD == 2) {
+    int32_t x1 = 0; x1 |= (int)buff[0];
+    int32_t x2 = 0; x2 |= (int)buff[1];
+    int32_t x3 = 0; x3 |= (int)buff[2];
+    seconds = x1*60*60+x2*60+x3;
+  }else if(p.iD == 1) {
+    display.display();
+  }else if(p.iD == 3) {
+    displayNotification(buff, p.len, 0);
+  }
+}
+void readPacket()
+{
+  struct Packet packet;
+  packet.iD = (char)BTLEserial.read();
+  packet.len = (char)BTLEserial.read();
+  Serial.print("piD: "); Serial.println((int)packet.iD);
+  Serial.print("pLe: "); Serial.println((int)packet.len);
+  processPacket(packet);
+}
+
 aci_evt_opcode_t laststatus = ACI_EVT_DISCONNECTED;
 unsigned long lastmillis = 0;
 void loop() {
   unsigned long m = millis();
-  if(m-lastmillis > 1000) {
+  if(m-lastmillis >= 1000) {
     clock();
     lastmillis = m;
   }
   
-  BTLEserial.pollACI();
-  aci_evt_opcode_t status = BTLEserial.getState();
-  if (status != laststatus) {
-    if (status == ACI_EVT_DEVICE_STARTED) {
-        Serial.println(F("* Advertising started"));
-    }
-    if (status == ACI_EVT_CONNECTED) {
-        Serial.println(F("* Connected!"));
-    }
-    if (status == ACI_EVT_DISCONNECTED) {
-        Serial.println(F("* Disconnected or advertising timed out"));
-    }
-    laststatus = status;
-  }
-
-  if (status == ACI_EVT_CONNECTED) {
-    if (BTLEserial.available()) {
-      Serial.print("* "); Serial.print(BTLEserial.available()); Serial.println(F(" bytes available from BTLE"));
-    }
-    char c[BTLEserial.available()+1]; int cnt = 0;
-    while (BTLEserial.available()) {
-      char c2 = BTLEserial.read();
-      c[cnt] = c2;
-      cnt++;
-    }
-    char cmd = c[0];
-    if(cmd == 3)
-    {
-      displayNotification(c, cnt-1, 1);
-    }else {
-      if(cnt == 5)
-      {
-        if(cmd == 1) display.display();
-        if(cmd == 2) 
-        {
-          int32_t x1 = 0; x1 |= (int)c[1];
-          int32_t x2 = 0; x2 |= (int)c[2];
-          int32_t x3 = 0; x3 |= (int)c[3];
-          seconds = x1*60*60+x2*60+x3;
-        }
-      }else {
-        char x = c[1];
-        char y = c[2];
-        char d = c[3];
-        char d2 = c[4];
-        display.setData(x, (int16_t)y, (int)(d<<8)+d2);
-      }
-    }
+  if(!BTLEserial.available()) BTLEserial.pollACI();
+  if (BTLEserial.getState() == ACI_EVT_CONNECTED) {
+    if(BTLEserial.available() > 0) readPacket();
   }
 }
 
